@@ -7,15 +7,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -24,17 +28,23 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.repository.ExpenseRepository
 import com.example.ui.auth.AuthViewModel
@@ -46,6 +56,7 @@ import com.example.ui.expenses.ExpensesListScreen
 import com.example.ui.insights.AiInsightsScreen
 import com.example.ui.insights.AiInsightsViewModel
 import com.example.ui.profile.ProfileScreen
+import com.example.ui.reports.ReportsScreen
 import com.example.ui.theme.LightBlue
 import com.example.ui.theme.PrimaryBlue
 
@@ -53,10 +64,11 @@ enum class NavTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     EXPENSES("Expenses", Icons.AutoMirrored.Filled.ReceiptLong),
     DAILY("Daily View", Icons.Default.CalendarMonth),
-    AI_ADVISOR("AI Advisor", Icons.Default.AutoAwesome),
+    REPORTS("Reports", Icons.Default.BarChart),
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppContent(
     repository: ExpenseRepository,
@@ -67,6 +79,7 @@ fun MainAppContent(
 ) {
     val state by expenseViewModel.uiState.collectAsStateWithLifecycle()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var showAiModal by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.userMessage) {
@@ -76,7 +89,7 @@ fun MainAppContent(
         }
     }
 
-    val showFab = selectedTabIndex == 0 || selectedTabIndex == 1 || selectedTabIndex == 2
+    val showFab = selectedTabIndex in 0..3
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -146,6 +159,7 @@ fun MainAppContent(
                     viewModel = expenseViewModel,
                     onNavigateToExpenses = { selectedTabIndex = 1 },
                     onNavigateToDaily = { selectedTabIndex = 2 },
+                    onNavigateToReports = { selectedTabIndex = 3 },
                     onNavigateToProfile = { selectedTabIndex = 4 }
                 )
                 1 -> ExpensesListScreen(
@@ -156,9 +170,11 @@ fun MainAppContent(
                     state = state,
                     viewModel = expenseViewModel
                 )
-                3 -> AiInsightsScreen(
+                3 -> ReportsScreen(
                     state = state,
-                    aiViewModel = aiViewModel
+                    viewModel = expenseViewModel,
+                    aiViewModel = aiViewModel,
+                    onNavigateToAiAdvisor = { showAiModal = true }
                 )
                 4 -> ProfileScreen(
                     state = state,
@@ -213,6 +229,49 @@ fun MainAppContent(
                         expenseViewModel.confirmDeleteExpense(state.selectedExpenseForDetails!!.id)
                     }
                 )
+            }
+
+            // AI Advisor Modal Screen
+            if (showAiModal) {
+                Dialog(
+                    onDismissRequest = { showAiModal = false },
+                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        "Gemini AI Financial Advisor",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = { showAiModal = false }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Close AI Advisor"
+                                        )
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
+                            )
+                        }
+                    ) { modalPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(modalPadding)
+                        ) {
+                            AiInsightsScreen(
+                                state = state,
+                                aiViewModel = aiViewModel
+                            )
+                        }
+                    }
+                }
             }
         }
     }

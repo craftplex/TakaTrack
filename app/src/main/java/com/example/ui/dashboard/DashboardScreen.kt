@@ -73,12 +73,15 @@ import com.example.ui.theme.WarningOrange
 import java.util.Calendar
 import java.util.Locale
 
+import androidx.compose.material.icons.filled.BarChart
+
 @Composable
 fun DashboardScreen(
     state: ExpenseScreenState,
     viewModel: ExpenseViewModel,
     onNavigateToExpenses: () -> Unit,
     onNavigateToDaily: () -> Unit,
+    onNavigateToReports: () -> Unit,
     onNavigateToProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -198,6 +201,7 @@ fun DashboardScreen(
             QuickActionsBar(
                 onAddExpense = { viewModel.openAddExpenseDialog() },
                 onViewDaily = onNavigateToDaily,
+                onViewReports = onNavigateToReports,
                 onSetLimit = onNavigateToProfile
             )
         }
@@ -819,6 +823,7 @@ private fun EmptyExpensesPlaceholder(onAddClick: () -> Unit) {
 private fun QuickActionsBar(
     onAddExpense: () -> Unit,
     onViewDaily: () -> Unit,
+    onViewReports: () -> Unit,
     onSetLimit: () -> Unit
 ) {
     Card(
@@ -847,6 +852,11 @@ private fun QuickActionsBar(
                     icon = Icons.Default.CalendarMonth,
                     label = "Daily View",
                     onClick = onViewDaily
+                )
+                QuickActionItem(
+                    icon = Icons.Default.BarChart,
+                    label = "Reports",
+                    onClick = onViewReports
                 )
                 QuickActionItem(
                     icon = Icons.Default.Tune,
