@@ -123,25 +123,66 @@ fun ReportsScreen(
             .testTag("reports_screen"),
         contentPadding = PaddingValues(bottom = 96.dp)
     ) {
-        // 8.1 Header
+        // 8.1 Header with Export & Share
         item {
+            val context = androidx.compose.ui.platform.LocalContext.current
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                Text(
-                    text = "Spending Reports",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = HeadingDark
-                    )
-                )
-                Text(
-                    text = "Understand where your money goes • খরচের পূর্ণাঙ্গ রিপোর্ট",
-                    style = MaterialTheme.typography.bodySmall.copy(color = SecondaryText),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Spending Reports",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = HeadingDark
+                            )
+                        )
+                        Text(
+                            text = "Understand where your money goes • খরচের পূর্ণাঙ্গ রিপোর্ট",
+                            style = MaterialTheme.typography.bodySmall.copy(color = SecondaryText),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = {
+                                val csvStr = com.example.util.ExpenseExporter.exportToCsv(state.allExpenses)
+                                com.example.util.ExpenseExporter.shareText(
+                                    context,
+                                    csvStr,
+                                    "Export TakaTrack Expenses (CSV)"
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = LightBlue, contentColor = PrimaryBlue),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(imageVector = androidx.compose.material.icons.Icons.Default.QueryStats, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("CSV Export", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        Button(
+                            onClick = {
+                                val summaryStr = com.example.util.ExpenseExporter.generateFormattedSummary(state.filteredExpenses, state.selectedDateFilter.labelBn)
+                                com.example.util.ExpenseExporter.copyToClipboard(context, summaryStr)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue, contentColor = Color.White),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Summary", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
 
@@ -578,6 +619,11 @@ private fun MonthlyReportContent(data: MonthlyReportData) {
             data.categoryBreakdowns.forEach { catSummary ->
                 CategoryProgressCard(catSummary = catSummary)
             }
+        }
+
+        // B.1 Payment Method Breakdown
+        if (data.paymentBreakdowns.isNotEmpty()) {
+            PaymentMethodBreakdownCard(paymentBreakdowns = data.paymentBreakdowns)
         }
 
         // C. Shop-wise Shopping Report
@@ -1192,6 +1238,55 @@ private fun CategoryProgressCard(catSummary: CategorySummary) {
                 color = catSummary.category.color,
                 trackColor = LightBlue
             )
+        }
+    }
+}
+
+@Composable
+private fun PaymentMethodBreakdownCard(paymentBreakdowns: List<PaymentMethodSummary>) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        border = BorderStroke(1.dp, BorderLight)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "পরিশোধের মাধ্যম বিশ্লেষণ (Payment Breakdown)",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = HeadingDark)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            paymentBreakdowns.forEach { item ->
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = item.paymentMethod,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = HeadingDark)
+                        )
+                        Text(
+                            text = "৳ ${String.format(Locale.US, "%,.0f", item.totalAmount)} (${(item.percentage * 100).toInt()}%)",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { item.percentage.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(CircleShape),
+                        color = PrimaryBlue,
+                        trackColor = LightBlue
+                    )
+                }
+            }
         }
     }
 }

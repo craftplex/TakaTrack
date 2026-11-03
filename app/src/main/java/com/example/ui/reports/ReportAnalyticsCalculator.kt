@@ -54,10 +54,6 @@ object ReportAnalyticsCalculator {
     }
 
     fun calculateWeeklyReport(allExpenses: List<Expense>): WeeklyReportData {
-        val cal = Calendar.getInstance()
-        cal.time = Date()
-        val dayFormatEn = SimpleDateFormat("EEE", Locale.US)
-
         val dayNamesEn = listOf("Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri")
         val dayNamesBn = listOf("শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার")
 
@@ -116,13 +112,25 @@ object ReportAnalyticsCalculator {
             )
         }.sortedByDescending { it.totalAmount }
 
+        val payMap = weekExpenses.groupBy { it.paymentMethod }
+        val paymentBreakdowns = payMap.map { (method, list) ->
+            val sum = list.sumOf { it.amount }
+            PaymentMethodSummary(
+                paymentMethod = method,
+                totalAmount = sum,
+                percentage = if (total > 0) (sum / total).toFloat() else 0f,
+                count = list.size
+            )
+        }.sortedByDescending { it.totalAmount }
+
         return WeeklyReportData(
             weeklyTotal = total,
             dayBars = dayBars,
             mostExpensiveDay = peakDay,
             lowestSpendingDay = lowestDay,
             weeklyAverage = total / 7.0,
-            topCategories = topCategories
+            topCategories = topCategories,
+            paymentBreakdowns = paymentBreakdowns
         )
     }
 
@@ -176,9 +184,20 @@ object ReportAnalyticsCalculator {
             )
         }.sortedByDescending { it.totalAmount }
 
+        // Payment method breakdown
+        val payMap = currentMonthExpenses.groupBy { it.paymentMethod }
+        val paymentBreakdowns = payMap.map { (method, list) ->
+            val sum = list.sumOf { it.amount }
+            PaymentMethodSummary(
+                paymentMethod = method,
+                totalAmount = sum,
+                percentage = if (currentTotal > 0) (sum / currentTotal).toFloat() else 0f,
+                count = list.size
+            )
+        }.sortedByDescending { it.totalAmount }
+
         // Unusual / Unnecessary spending detection
         val unusualItems = mutableListOf<UnusualSpendingItem>()
-        // 1. High individual transaction (> 30% of monthly total or > ৳3000)
         val largeExpenses = currentMonthExpenses.filter { it.amount >= 3000 || (currentTotal > 0 && it.amount > currentTotal * 0.3) }
         for (item in largeExpenses.take(2)) {
             unusualItems.add(
@@ -191,7 +210,6 @@ object ReportAnalyticsCalculator {
             )
         }
 
-        // 2. Multiple transactions on the same shop on the same day
         val shopDayGroups = currentMonthExpenses.filter { it.shopName.isNotBlank() }
             .groupBy { "${it.shopName}_${it.expenseDate}" }
             .filter { it.value.size >= 2 }
@@ -207,7 +225,6 @@ object ReportAnalyticsCalculator {
             )
         }
 
-        // 3. Entertainment category spike
         val entSummary = categories.firstOrNull { it.category.id == "entertainment" }
         if (entSummary != null && entSummary.percentage >= 0.25f) {
             unusualItems.add(
@@ -232,6 +249,7 @@ object ReportAnalyticsCalculator {
             budgetUsagePercent = budgetUsagePct,
             categoryBreakdowns = categories,
             shopBreakdowns = shops,
+            paymentBreakdowns = paymentBreakdowns,
             unusualSpendings = unusualItems
         )
     }
@@ -283,6 +301,17 @@ object ReportAnalyticsCalculator {
             .maxByOrNull { it.value.size }
             ?.key
 
+        val payMap = yearExpenses.groupBy { it.paymentMethod }
+        val paymentBreakdowns = payMap.map { (method, list) ->
+            val sum = list.sumOf { it.amount }
+            PaymentMethodSummary(
+                paymentMethod = method,
+                totalAmount = sum,
+                percentage = if (annualTotal > 0) (sum / annualTotal).toFloat() else 0f,
+                count = list.size
+            )
+        }.sortedByDescending { it.totalAmount }
+
         val trends = mutableListOf<String>()
         if (topCategory != null) {
             trends.add("এই বছর আপনার প্রধান ব্যয়ের খাত ছিল ${topCategory.category.nameBn} (৳${topCategory.totalAmount.toInt()})।")
@@ -300,6 +329,7 @@ object ReportAnalyticsCalculator {
             annualLimit = monthlyLimit * 12,
             highestCategory = topCategory,
             mostFrequentShop = mostFrequentShop,
+            paymentBreakdowns = paymentBreakdowns,
             trends = trends
         )
     }
@@ -344,7 +374,6 @@ object ReportAnalyticsCalculator {
                 labelB = "Previous 30 Days (পূর্বের ৩০ দিন)"
             }
             else -> {
-                // last_7_days vs previous_7_days
                 val cal7 = Calendar.getInstance()
                 cal7.add(Calendar.DAY_OF_YEAR, -7)
                 val d7 = sdf.format(cal7.time)
@@ -367,7 +396,6 @@ object ReportAnalyticsCalculator {
         val avgA = totalA / days
         val avgB = totalB / days
 
-        // Category difference
         val allCatIds = (periodAExpenses.map { it.categoryId } + periodBExpenses.map { it.categoryId }).distinct()
         val catDiffs = allCatIds.map { catId ->
             val cat = CategoryConstants.getCategoryById(catId)
@@ -404,7 +432,6 @@ object ReportAnalyticsCalculator {
         val dailyAvg = total / days
         val weeklyAvg = dailyAvg * 7.0
 
-        // Weekday vs Weekend (Fri & Sat in Bangladesh)
         var weekdaySum = 0.0
         var weekendSum = 0.0
         var morningSum = 0.0
@@ -433,7 +460,6 @@ object ReportAnalyticsCalculator {
             }
         }
 
-        // Peak day
         val dayGroup = allExpenses.groupBy {
             try {
                 val d = sdf.parse(it.expenseDate)

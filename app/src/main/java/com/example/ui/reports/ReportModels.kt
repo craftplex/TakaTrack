@@ -26,6 +26,13 @@ data class ShopExpenseSummary(
     val count: Int
 )
 
+data class PaymentMethodSummary(
+    val paymentMethod: String,
+    val totalAmount: Double,
+    val percentage: Float,
+    val count: Int
+)
+
 data class UnusualSpendingItem(
     val title: String,
     val reason: String,
@@ -50,7 +57,8 @@ data class WeeklyReportData(
     val mostExpensiveDay: DayBarData? = null,
     val lowestSpendingDay: DayBarData? = null,
     val weeklyAverage: Double = 0.0,
-    val topCategories: List<CategorySummary> = emptyList()
+    val topCategories: List<CategorySummary> = emptyList(),
+    val paymentBreakdowns: List<PaymentMethodSummary> = emptyList()
 )
 
 data class MonthlyReportData(
@@ -65,6 +73,7 @@ data class MonthlyReportData(
     val budgetUsagePercent: Float = 0f,
     val categoryBreakdowns: List<CategorySummary> = emptyList(),
     val shopBreakdowns: List<ShopExpenseSummary> = emptyList(),
+    val paymentBreakdowns: List<PaymentMethodSummary> = emptyList(),
     val unusualSpendings: List<UnusualSpendingItem> = emptyList()
 )
 
@@ -76,6 +85,7 @@ data class YearlyReportData(
     val annualLimit: Double = 240000.0,
     val highestCategory: CategorySummary? = null,
     val mostFrequentShop: String? = null,
+    val paymentBreakdowns: List<PaymentMethodSummary> = emptyList(),
     val trends: List<String> = emptyList()
 )
 

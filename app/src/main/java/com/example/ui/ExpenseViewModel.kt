@@ -24,6 +24,7 @@ import java.util.Locale
 
 import com.example.data.model.CategoryBudgetInfo
 import com.example.data.model.SplitParticipant
+import com.example.data.model.ExpenseTemplate
 
 data class CategorySummary(
     val category: ExpenseCategory,
@@ -80,6 +81,7 @@ data class ExpenseScreenState(
     val categoryBreakdowns: List<CategorySummary> = emptyList(),
     val categoryBudgetsInfo: List<CategoryBudgetInfo> = emptyList(),
     val customTags: List<String> = listOf("Personal", "Family", "Office", "Travel", "Emergency"),
+    val quickTemplates: List<ExpenseTemplate> = ExpenseTemplate.DefaultTemplates,
     val budgetWarning50: Boolean = true,
     val budgetWarning75: Boolean = true,
     val budgetWarning90: Boolean = true,
@@ -98,19 +100,28 @@ data class ExpenseScreenState(
     val selectedExpenseForDetails: Expense? = null,
     val isEditDialogOpen: Boolean = false,
     val isDeleteDialogOpen: Boolean = false,
-    val userMessage: String? = null
+    val userMessage: String? = null,
+    val isPinUnlocked: Boolean = false
 )
 
 class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
     private val _filterParams = MutableStateFlow(FilterParams())
+    private val _isPinUnlockedSession = MutableStateFlow(false)
 
     val uiState: StateFlow<ExpenseScreenState> = combine(
         repository.observeExpenses().catch { emit(emptyList()) },
         repository.observeUserProfile().catch { emit(null) },
-        _filterParams
-    ) { rawExpenses, profile, params ->
-        calculateUiState(rawExpenses, profile, params)
+        repository.observeTemplates().catch { emit(emptyList()) },
+        _filterParams,
+        _isPinUnlockedSession
+    ) { rawExpenses, profile, userTemplates, params, isUnlocked ->
+        val templatesToUse = if (userTemplates.isNotEmpty()) {
+            userTemplates + ExpenseTemplate.DefaultTemplates.filter { def -> userTemplates.none { u -> u.title.equals(def.title, ignoreCase = true) } }
+        } else {
+            ExpenseTemplate.DefaultTemplates
+        }
+        calculateUiState(rawExpenses, profile, templatesToUse, params, isUnlocked)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000L),
@@ -396,6 +407,105 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
         }
     }
 
+    fun logExpenseFromTemplate(template: ExpenseTemplate) {
+        addExpense(
+            amount = template.amount,
+            title = template.title,
+            categoryId = template.categoryId,
+            shopName = template.shopName,
+            paymentMethod = template.paymentMethod,
+            date = getTodayDateString(),
+            time = getCurrentTimeString(),
+            notes = template.notes,
+            tags = template.tags
+        )
+    }
+
+    fun addCustomTemplate(
+        title: String,
+        amount: Double,
+        categoryId: String,
+        paymentMethod: String,
+        shopName: String,
+        notes: String,
+        tags: List<String>
+    ) {
+        val tmpl = ExpenseTemplate(
+            title = title,
+            amount = amount,
+            categoryId = categoryId,
+            paymentMethod = paymentMethod,
+            shopName = shopName,
+            notes = notes,
+            tags = tags
+        )
+        viewModelScope.launch {
+            val res = repository.addTemplate(tmpl)
+            val currentDialog = _filterParams.value.dialogState
+            if (res.isSuccess) {
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = "নতুন টেমপ্লেট '$title' যুক্ত করা হয়েছে!")
+                )
+            }
+        }
+    }
+
+    fun deleteTemplate(templateId: String) {
+        if (templateId.startsWith("default_")) return
+        viewModelScope.launch {
+            val res = repository.deleteTemplate(templateId)
+            if (res.isSuccess) {
+                val currentDialog = _filterParams.value.dialogState
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = "টেমপ্লেট মুছে ফেলা হয়েছে")
+                )
+            }
+        }
+    }
+
+    fun clearAllExpenseData() {
+        viewModelScope.launch {
+            val res = repository.deleteAllExpenses()
+            val currentDialog = _filterParams.value.dialogState
+            if (res.isSuccess) {
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = "আপনার সমস্ত খরচের তথ্য সফলভাবে মুছে ফেলা হয়েছে (Data Reset Completed)")
+                )
+            } else {
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = "তথ্য মুছে ফেলার সময় সমস্যা দেখা দিয়েছে")
+                )
+            }
+        }
+    }
+
+    fun updatePinLock(isPinEnabled: Boolean, pinCode: String) {
+        viewModelScope.launch {
+            val res = repository.updatePinLock(isPinEnabled, pinCode)
+            if (res.isSuccess) {
+                val msg = if (isPinEnabled) "পিন লক সক্রিয় করা হয়েছে ($pinCode)" else "পিন লক নিষ্ক্রিয় করা হয়েছে"
+                val currentDialog = _filterParams.value.dialogState
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = msg)
+                )
+            }
+        }
+    }
+
+    fun unlockPin(enteredPin: String): Boolean {
+        val userPin = uiState.value.userProfile?.pinCode ?: ""
+        return if (enteredPin == userPin) {
+            _isPinUnlockedSession.value = true
+            true
+        } else {
+            false
+        }
+    }
+
+    fun lockPin() {
+        _isPinUnlockedSession.value = false
+    }
+
     companion object {
         fun getTodayDateString(): String {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -412,7 +522,9 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
 private fun calculateUiState(
     allExpenses: List<Expense>,
     profile: UserProfile?,
-    params: FilterParams
+    templates: List<ExpenseTemplate>,
+    params: FilterParams,
+    isUnlocked: Boolean
 ): ExpenseScreenState {
     val today = ExpenseViewModel.getTodayDateString()
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -668,6 +780,7 @@ private fun calculateUiState(
         categoryBreakdowns = breakdowns,
         categoryBudgetsInfo = categoryBudgetsInfoList,
         customTags = customTagsList,
+        quickTemplates = templates,
         budgetWarning50 = profile?.budgetWarning50 ?: true,
         budgetWarning75 = profile?.budgetWarning75 ?: true,
         budgetWarning90 = profile?.budgetWarning90 ?: true,
@@ -686,6 +799,7 @@ private fun calculateUiState(
         selectedExpenseForDetails = params.dialogState.detailsExpense,
         isEditDialogOpen = params.dialogState.isEdit,
         isDeleteDialogOpen = params.dialogState.isDelete,
-        userMessage = params.dialogState.message
+        userMessage = params.dialogState.message,
+        isPinUnlocked = isUnlocked
     )
 }

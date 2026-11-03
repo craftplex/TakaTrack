@@ -122,6 +122,19 @@ fun DashboardScreen(
             )
         }
 
+        // 3.5 Quick Expense Templates (1-Tap Logging)
+        if (state.quickTemplates.isNotEmpty()) {
+            item {
+                SectionHeader(title = "দ্রুত খরচ রেকর্ড (1-Tap Quick Log)")
+                QuickTemplatesRow(
+                    templates = state.quickTemplates,
+                    onTemplateClick = { template ->
+                        viewModel.logExpenseFromTemplate(template)
+                    }
+                )
+            }
+        }
+
         // 4. Spending Trend Visualizer
         if (state.filteredExpenses.isNotEmpty()) {
             item {
@@ -911,5 +924,86 @@ private fun getGreetingMessage(): String {
         in 12..16 -> "Good Afternoon"
         in 17..20 -> "Good Evening"
         else -> "Hello"
+    }
+}
+
+@Composable
+private fun QuickTemplatesRow(
+    templates: List<com.example.data.model.ExpenseTemplate>,
+    onTemplateClick: (com.example.data.model.ExpenseTemplate) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(templates) { template ->
+            val cat = CategoryConstants.getCategoryById(template.categoryId)
+            Card(
+                modifier = Modifier
+                    .width(150.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onTemplateClick(template) },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(cat.color.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = cat.icon,
+                                contentDescription = null,
+                                tint = cat.color,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(LightBlue)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "1-Tap",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlue
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = template.title,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "৳ ${String.format(Locale.US, "%,.0f", template.amount)}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryBlue
+                        )
+                    )
+                    Text(
+                        text = template.paymentMethod.substringBefore(" "),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+        }
     }
 }

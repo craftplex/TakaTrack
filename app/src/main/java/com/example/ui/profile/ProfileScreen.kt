@@ -1,5 +1,6 @@
 package com.example.ui.profile
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -95,6 +97,19 @@ fun ProfileScreen(
     // Custom Tag creation state
     var isAddTagDialogOpen by remember { mutableStateOf(false) }
     var newTagInputText by remember { mutableStateOf("") }
+
+    // Phase 4 PIN Lock state
+    var isPinDialogOpen by remember { mutableStateOf(false) }
+    var pinInputText by remember { mutableStateOf("") }
+
+    // Phase 4 Clear Data state
+    var isClearAllConfirmOpen by remember { mutableStateOf(false) }
+
+    // Phase 4 Quick Template creation state
+    var isNewTemplateDialogOpen by remember { mutableStateOf(false) }
+    var newTemplateTitle by remember { mutableStateOf("") }
+    var newTemplateAmountText by remember { mutableStateOf("") }
+    var newTemplateCatId by remember { mutableStateOf("food") }
 
     val user = authViewModel.uiState.value.user
     val profile = state.userProfile
@@ -470,6 +485,199 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
+        // Quick Expense Templates Management Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Quick Templates (১-ট্যাপ টেমপ্লেট)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        TextButton(onClick = { isNewTemplateDialogOpen = true }) {
+                            Text("+ New", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "সহজে বার বার ব্যবহারের জন্য খরচের টেমপ্লেটসমূহ:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    state.quickTemplates.take(6).forEach { tmpl ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "• ${tmpl.title} (৳${tmpl.amount.toInt()})",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (!tmpl.id.startsWith("default_")) {
+                                IconButton(
+                                    onClick = { viewModel.deleteTemplate(tmpl.id) },
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Delete Template", tint = DangerRed, modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // App Security & PIN Lock Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "App Security (পিন লক সুরক্ষা)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = if (profile?.isPinEnabled == true) "PIN Enabled (${profile.pinCode})" else "গোপনীয়তা রক্ষায় ৪ ডিজিটের পিন ব্যবহার করুন",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        Switch(
+                            checked = profile?.isPinEnabled ?: false,
+                            onCheckedChange = { checked ->
+                                if (checked) {
+                                    isPinDialogOpen = true
+                                } else {
+                                    viewModel.updatePinLock(false, "")
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = PrimaryBlue)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Data Export & Backup Options
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Data Export & Backup (ডেটা ব্যাকআপ)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "আপনার সমস্ত রেকর্ডিং CSV ফাইল বা লিখিত রিপোর্ট হিসেবে ব্যাকআপ রাখুন:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val csvStr = com.example.util.ExpenseExporter.exportToCsv(state.allExpenses)
+                                com.example.util.ExpenseExporter.shareText(context, csvStr, "Export Expenses (CSV)")
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = LightBlue, contentColor = PrimaryBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Share CSV File", style = MaterialTheme.typography.labelSmall)
+                        }
+
+                        Button(
+                            onClick = {
+                                val summaryStr = com.example.util.ExpenseExporter.generateFormattedSummary(state.allExpenses, "Total Records")
+                                com.example.util.ExpenseExporter.copyToClipboard(context, summaryStr)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue, contentColor = Color.White),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Copy Summary", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Data Reset Action (Clear All Expenses)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1F1)),
+                border = BorderStroke(1.dp, DangerRed.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Data Management (ডেটা রিসেট)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = DangerRed)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "সমস্ত খরচের তালিকা স্থায়ীভাবে মুছে ফেলতে চান?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { isClearAllConfirmOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Clear All Expense Records")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // Business Rule / About App
         item {
             Card(
@@ -700,6 +908,134 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { isSignOutConfirmOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Set PIN Dialog
+    if (isPinDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isPinDialogOpen = false },
+            title = { Text("Set 4-Digit Security PIN") },
+            text = {
+                Column {
+                    Text(
+                        text = "অ্যাপের গোপনীয়তা রক্ষা করার জন্য ৪ সংখ্যার পিন কোড প্রদান করুন:",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = pinInputText,
+                        onValueChange = { if (it.length <= 4 && it.all { ch -> ch.isDigit() }) pinInputText = it },
+                        label = { Text("4-Digit PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pinInputText.length == 4) {
+                            viewModel.updatePinLock(true, pinInputText)
+                            isPinDialogOpen = false
+                            pinInputText = ""
+                        }
+                    }
+                ) {
+                    Text("Enable PIN")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isPinDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Add Quick Template Dialog
+    if (isNewTemplateDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isNewTemplateDialogOpen = false },
+            title = { Text("Create Quick Template (নতুন টেমপ্লেট)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newTemplateTitle,
+                        onValueChange = { newTemplateTitle = it },
+                        label = { Text("Title (e.g. Daily Rickshaw)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newTemplateAmountText,
+                        onValueChange = { if (it.all { ch -> ch.isDigit() || ch == '.' }) newTemplateAmountText = it },
+                        label = { Text("Amount in BDT (৳)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = newTemplateAmountText.toDoubleOrNull() ?: 0.0
+                        if (newTemplateTitle.isNotBlank() && amt > 0) {
+                            viewModel.addCustomTemplate(
+                                title = newTemplateTitle.trim(),
+                                amount = amt,
+                                categoryId = "food",
+                                paymentMethod = "Cash (নগদ)",
+                                shopName = "",
+                                notes = "Template",
+                                tags = listOf("Quick")
+                            )
+                            newTemplateTitle = ""
+                            newTemplateAmountText = ""
+                            isNewTemplateDialogOpen = false
+                        }
+                    }
+                ) {
+                    Text("Save Template")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isNewTemplateDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Clear All Expense Data Double-Confirmation Dialog
+    if (isClearAllConfirmOpen) {
+        AlertDialog(
+            onDismissRequest = { isClearAllConfirmOpen = false },
+            title = { Text("⚠️ রিসেট নিশ্চিতকরণ (Data Reset)") },
+            text = {
+                Text(
+                    text = "আপনি কি নিশ্চিত যে আপনার সমস্ত খরচের হিসাব মুছে ফেলতে চান? এই পদক্ষেপটি আর ফিরিয়ে নেওয়া যাবে না।",
+                    color = DangerRed
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isClearAllConfirmOpen = false
+                        viewModel.clearAllExpenseData()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                ) {
+                    Text("Yes, Delete Everything")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isClearAllConfirmOpen = false }) {
                     Text("Cancel")
                 }
             }

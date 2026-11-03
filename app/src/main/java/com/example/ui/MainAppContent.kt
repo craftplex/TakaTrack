@@ -1,10 +1,19 @@
 package com.example.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -292,6 +301,106 @@ fun MainAppContent(
                                 aiViewModel = aiViewModel
                             )
                         }
+                    }
+                }
+            }
+
+            // PIN Lock Overlay
+            if (state.userProfile?.isPinEnabled == true && !state.isPinUnlocked) {
+                PinUnlockOverlay(
+                    onUnlockSubmit = { pin -> expenseViewModel.unlockPin(pin) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinUnlockOverlay(
+    onUnlockSubmit: (String) -> Boolean
+) {
+    var pinText by remember { mutableStateOf("") }
+    var isError by remember { mutableStateOf(false) }
+
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Card(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 6.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(LightBlue),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Lock",
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "TakaTrack Protected",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "অনুগ্রহ করে ৪ সংখ্যার পিন কোড প্রবেশ করুন",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                    )
+
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pinText,
+                        onValueChange = { input ->
+                            if (input.length <= 4 && input.all { it.isDigit() }) {
+                                pinText = input
+                                isError = false
+                            }
+                        },
+                        label = { Text("Enter PIN") },
+                        isError = isError,
+                        supportingText = { if (isError) Text("ভুল পিন কোড! পুনরায় চেষ্টা করুন", color = com.example.ui.theme.DangerRed) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.size(16.dp))
+                    androidx.compose.material3.Button(
+                        onClick = {
+                            val success = onUnlockSubmit(pinText)
+                            if (!success) {
+                                isError = true
+                                pinText = ""
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .size(48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Unlock App", fontWeight = FontWeight.Bold)
                     }
                 }
             }

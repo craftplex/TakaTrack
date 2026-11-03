@@ -315,4 +315,103 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
             Result.failure(e)
         }
     }
+
+    /**
+     * Realtime flow of Quick Expense Templates for current user.
+     */
+    fun observeTemplates(): Flow<List<com.example.data.model.ExpenseTemplate>> = flow {
+        val uid = requireUserId()
+        val path = "users/$uid/templates"
+        emitAll(
+            db.collection("users").document(uid).collection("templates")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(com.example.data.model.ExpenseTemplate::class.java)
+                }
+                .catch { error ->
+                    if (error is Exception) handleFirestoreError(error, OperationType.LIST, path)
+                    throw error
+                }
+        )
+    }
+
+    suspend fun addTemplate(template: com.example.data.model.ExpenseTemplate): Result<String> {
+        val uid = requireUserId()
+        val collRef = db.collection("users").document(uid).collection("templates")
+        return try {
+            val payload = hashMapOf<String, Any>(
+                "title" to template.title.trim(),
+                "amount" to template.amount,
+                "categoryId" to template.categoryId,
+                "paymentMethod" to template.paymentMethod,
+                "shopName" to template.shopName.trim(),
+                "notes" to template.notes.trim(),
+                "tags" to template.tags,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            val doc = collRef.add(payload).await()
+            Result.success(doc.id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, collRef.path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteTemplate(templateId: String): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid).collection("templates").document(templateId)
+        return try {
+            docRef.delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Clears all recorded expenses for the user (Data Reset action).
+     */
+    suspend fun deleteAllExpenses(): Result<Unit> {
+        val uid = requireUserId()
+        val collRef = db.collection("users").document(uid).collection("expenses")
+        return try {
+            val snapshot = collRef.get().await()
+            for (doc in snapshot.documents) {
+                doc.reference.delete().await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, collRef.path)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Updates security preferences (PIN Lock toggle & 4-digit PIN code).
+     */
+    suspend fun updatePinLock(isPinEnabled: Boolean, pinCode: String): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid)
+        return try {
+            val updates = mapOf(
+                "isPinEnabled" to isPinEnabled,
+                "pinCode" to pinCode,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(updates, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
 }

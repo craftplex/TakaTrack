@@ -19,6 +19,8 @@ data class UserProfile(
     val budgetWarning75: Boolean = true,
     val budgetWarning90: Boolean = true,
     val budgetWarning100: Boolean = true,
+    val isPinEnabled: Boolean = false,
+    val pinCode: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
