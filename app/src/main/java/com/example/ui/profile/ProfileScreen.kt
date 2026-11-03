@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,14 +23,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,8 +40,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,6 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.CategoryBudgetInfo
+import com.example.data.model.ExpenseCategory
 import com.example.ui.ExpenseScreenState
 import com.example.ui.ExpenseViewModel
 import com.example.ui.auth.AuthViewModel
@@ -63,6 +73,7 @@ import com.example.ui.theme.LightBlue
 import com.example.ui.theme.PrimaryBlue
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     state: ExpenseScreenState,
@@ -76,6 +87,14 @@ fun ProfileScreen(
     var editNameText by remember { mutableStateOf("") }
     var editLimitText by remember { mutableStateOf("") }
     var isSignOutConfirmOpen by remember { mutableStateOf(false) }
+
+    // Category budget editing state
+    var selectedCategoryForBudget by remember { mutableStateOf<ExpenseCategory?>(null) }
+    var categoryBudgetInputText by remember { mutableStateOf("") }
+
+    // Custom Tag creation state
+    var isAddTagDialogOpen by remember { mutableStateOf(false) }
+    var newTagInputText by remember { mutableStateOf("") }
 
     val user = authViewModel.uiState.value.user
     val profile = state.userProfile
@@ -166,11 +185,11 @@ fun ProfileScreen(
             )
         }
 
-        // Monthly Spending Limit
+        // Monthly Overall Spending Limit
         item {
             SettingsCardItem(
                 icon = Icons.Default.Tune,
-                title = "Monthly Spending Limit (মাসিক বাজেট সীমা)",
+                title = "Monthly Spending Limit (মাসিক মোট সীমা)",
                 value = "৳ ${String.format(Locale.US, "%,.0f", state.monthlyLimit)}",
                 subtitle = "বাজেটের অতিরিক্ত খরচ হলে সতর্কতা পাবেন",
                 onClick = {
@@ -178,7 +197,250 @@ fun ProfileScreen(
                     isEditLimitOpen = true
                 }
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Category-wise Budget Management
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Category,
+                                contentDescription = null,
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Category Budgets (খাতভিত্তিক বাজেট)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    state.categoryBudgetsInfo.forEach { budgetInfo ->
+                        val cat = budgetInfo.category
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable {
+                                    selectedCategoryForBudget = cat
+                                    categoryBudgetInputText = if (budgetInfo.limitAmount > 0) budgetInfo.limitAmount.toInt().toString() else ""
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = cat.icon,
+                                        contentDescription = null,
+                                        tint = cat.color,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = cat.nameBn,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (budgetInfo.limitAmount > 0) {
+                                        Text(
+                                            text = "৳${String.format(Locale.US, "%.0f", budgetInfo.spentAmount)} / ৳${String.format(Locale.US, "%.0f", budgetInfo.limitAmount)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = budgetInfo.getStatusColor()
+                                            )
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "সীমা নির্ধারণ করুন",
+                                            style = MaterialTheme.typography.labelSmall.copy(color = PrimaryBlue)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit", tint = PrimaryBlue, modifier = Modifier.size(14.dp))
+                                }
+                            }
+
+                            if (budgetInfo.limitAmount > 0) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                val progress = (budgetInfo.usagePercent / 100f).coerceIn(0f, 1f)
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = budgetInfo.getStatusColor(),
+                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = budgetInfo.getStatusLabelBn(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = budgetInfo.getStatusColor()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Custom Tags Management
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Sell,
+                                contentDescription = null,
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Custom Tags (কাস্টম ট্যাগসমূহ)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        TextButton(onClick = { isAddTagDialogOpen = true }) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("+ Add Tag", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        state.customTags.forEach { tag ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(LightBlue)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = tag,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = PrimaryBlue,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = { viewModel.deleteCustomTag(tag) },
+                                        modifier = Modifier.size(16.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Delete Tag",
+                                            tint = PrimaryBlue,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Budget Warning Notifications Settings
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Budget Alerts (সতর্কবার্তা নোটিফিকেশন)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    NotificationToggleRow(
+                        label = "৫০% বাজেট পূর্ণ হলে নোটিফিকেশন",
+                        checked = state.budgetWarning50,
+                        onCheckedChange = { chk ->
+                            viewModel.updateBudgetNotificationSettings(chk, state.budgetWarning75, state.budgetWarning90, state.budgetWarning100)
+                        }
+                    )
+                    NotificationToggleRow(
+                        label = "৭৫% বাজেট পূর্ণ হলে সতর্কতা",
+                        checked = state.budgetWarning75,
+                        onCheckedChange = { chk ->
+                            viewModel.updateBudgetNotificationSettings(state.budgetWarning50, chk, state.budgetWarning90, state.budgetWarning100)
+                        }
+                    )
+                    NotificationToggleRow(
+                        label = "৯০% বাজেট পূর্ণ হলে জরুরি অ্যালার্ট",
+                        checked = state.budgetWarning90,
+                        onCheckedChange = { chk ->
+                            viewModel.updateBudgetNotificationSettings(state.budgetWarning50, state.budgetWarning75, chk, state.budgetWarning100)
+                        }
+                    )
+                    NotificationToggleRow(
+                        label = "১০০% সীমা অতিক্রম অ্যালার্ট",
+                        checked = state.budgetWarning100,
+                        onCheckedChange = { chk ->
+                            viewModel.updateBudgetNotificationSettings(state.budgetWarning50, state.budgetWarning75, state.budgetWarning90, chk)
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         // Currency Setting
@@ -190,7 +452,7 @@ fun ProfileScreen(
                 subtitle = "বাংলাদেশি টাকা (ডিফল্ট)",
                 onClick = {}
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         // Language Setting
@@ -205,7 +467,7 @@ fun ProfileScreen(
                     viewModel.updateLanguage(nextLang)
                 }
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         // Business Rule / About App
@@ -257,6 +519,86 @@ fun ProfileScreen(
             }
             Spacer(modifier = Modifier.height(30.dp))
         }
+    }
+
+    // Category Budget Edit Dialog
+    if (selectedCategoryForBudget != null) {
+        val cat = selectedCategoryForBudget!!
+        AlertDialog(
+            onDismissRequest = { selectedCategoryForBudget = null },
+            title = { Text("${cat.nameBn}-এর বাজেট সীমা (৳)") },
+            text = {
+                Column {
+                    Text(
+                        text = "এই খাতের জন্য প্রতি মাসে সর্বাধিক কত টাকা খরচ করতে চান? (খালি রাখলে সীমা মুছে যাবে)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = categoryBudgetInputText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() }) categoryBudgetInputText = input
+                        },
+                        label = { Text("Monthly Limit (BDT ৳)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val limit = categoryBudgetInputText.toDoubleOrNull() ?: 0.0
+                        viewModel.setCategoryBudget(cat.id, limit)
+                        selectedCategoryForBudget = null
+                    }
+                ) {
+                    Text("Save Limit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedCategoryForBudget = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Add Custom Tag Dialog
+    if (isAddTagDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isAddTagDialogOpen = false },
+            title = { Text("Add Custom Tag (নতুন কাস্টম ট্যাগ)") },
+            text = {
+                OutlinedTextField(
+                    value = newTagInputText,
+                    onValueChange = { newTagInputText = it },
+                    label = { Text("Tag Name (e.g. Vacation, Medical)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newTagInputText.isNotBlank()) {
+                            viewModel.addCustomTag(newTagInputText.trim())
+                            newTagInputText = ""
+                        }
+                        isAddTagDialogOpen = false
+                    }
+                ) {
+                    Text("Add Tag")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isAddTagDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Edit Name Dialog
@@ -361,6 +703,33 @@ fun ProfileScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun NotificationToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = PrimaryBlue)
         )
     }
 }

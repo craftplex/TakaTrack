@@ -29,6 +29,12 @@ service cloud.firestore {
              (!('monthlyLimit' in data) || (data.monthlyLimit is number && data.monthlyLimit >= 0)) &&
              (!('currency' in data) || (data.currency is string && data.currency.size() <= 10)) &&
              (!('language' in data) || (data.language is string && data.language.size() <= 10)) &&
+             (!('categoryBudgets' in data) || data.categoryBudgets is map) &&
+             (!('customTags' in data) || (data.customTags is list && data.customTags.size() <= 50)) &&
+             (!('budgetWarning50' in data) || data.budgetWarning50 is bool) &&
+             (!('budgetWarning75' in data) || data.budgetWarning75 is bool) &&
+             (!('budgetWarning90' in data) || data.budgetWarning90 is bool) &&
+             (!('budgetWarning100' in data) || data.budgetWarning100 is bool) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
     }
 
@@ -45,6 +51,9 @@ service cloud.firestore {
              (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
              (!('tags' in data) || (data.tags is list && data.tags.size() <= 20 && (data.tags.size() == 0 || data.tags[0] is string))) &&
              (!('isSplit' in data) || data.isSplit is bool) &&
+             (!('splitParticipants' in data) || data.splitParticipants is list) &&
+             (!('splitType' in data) || (data.splitType is string && data.splitType.size() <= 50)) &&
+             (!('splitTotalBill' in data) || (data.splitTotalBill is number && data.splitTotalBill >= 0)) &&
              (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
     }
 
@@ -86,6 +95,10 @@ service cloud.firestore {
                          isValidExpense(incoming());
 
         allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /notifications/{notificationId} {
+        allow get, list, create, update, delete: if isSignedIn() && request.auth.uid == userId;
       }
     }
   }

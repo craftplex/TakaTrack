@@ -187,9 +187,25 @@ fun MainAppContent(
             if (state.isAddExpenseDialogOpen) {
                 AddExpenseDialog(
                     initialExpense = null,
+                    availableTags = state.customTags,
+                    onAddCustomTag = { tag -> expenseViewModel.addCustomTag(tag) },
                     onDismiss = { expenseViewModel.closeAddExpenseDialog() },
-                    onSave = { amount, title, catId, shop, payment, date, time, notes, tags ->
-                        expenseViewModel.addExpense(amount, title, catId, shop, payment, date, time, notes, tags)
+                    onSave = { amount, title, catId, shop, payment, date, time, notes, tags, isSplit, participants, splitType, totalBill ->
+                        expenseViewModel.addExpense(
+                            amount = amount,
+                            title = title,
+                            categoryId = catId,
+                            shopName = shop,
+                            paymentMethod = payment,
+                            date = date,
+                            time = time,
+                            notes = notes,
+                            tags = tags,
+                            isSplit = isSplit,
+                            splitParticipants = participants,
+                            splitType = splitType,
+                            splitTotalBill = totalBill
+                        )
                     }
                 )
             }
@@ -198,8 +214,10 @@ fun MainAppContent(
             if (state.isEditDialogOpen && state.selectedExpenseForDetails != null) {
                 AddExpenseDialog(
                     initialExpense = state.selectedExpenseForDetails,
+                    availableTags = state.customTags,
+                    onAddCustomTag = { tag -> expenseViewModel.addCustomTag(tag) },
                     onDismiss = { expenseViewModel.closeEditDialog() },
-                    onSave = { amount, title, catId, shop, payment, date, time, notes, tags ->
+                    onSave = { amount, title, catId, shop, payment, date, time, notes, tags, isSplit, participants, splitType, totalBill ->
                         val updated = state.selectedExpenseForDetails!!.copy(
                             amount = amount,
                             title = title,
@@ -209,7 +227,11 @@ fun MainAppContent(
                             expenseDate = date,
                             expenseTime = time,
                             notes = notes,
-                            tags = tags
+                            tags = tags,
+                            isSplit = isSplit,
+                            splitParticipants = participants,
+                            splitType = splitType,
+                            splitTotalBill = totalBill
                         )
                         expenseViewModel.updateExpense(updated)
                     }

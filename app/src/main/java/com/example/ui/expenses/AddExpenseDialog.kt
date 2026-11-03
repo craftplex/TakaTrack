@@ -21,11 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,9 +39,13 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,14 +64,18 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.CategoryConstants
 import com.example.data.model.Expense
+import com.example.data.model.SplitParticipant
 import com.example.ui.ExpenseViewModel
 import com.example.ui.theme.LightBlue
 import com.example.ui.theme.PrimaryBlue
+import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddExpenseDialog(
     initialExpense: Expense? = null,
+    availableTags: List<String> = listOf("Personal", "Family", "Office", "Travel", "Emergency"),
+    onAddCustomTag: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (
         amount: Double,
@@ -74,10 +86,22 @@ fun AddExpenseDialog(
         date: String,
         time: String,
         notes: String,
-        tags: List<String>
+        tags: List<String>,
+        isSplit: Boolean,
+        splitParticipants: List<SplitParticipant>,
+        splitType: String,
+        splitTotalBill: Double
     ) -> Unit
 ) {
-    var amountText by remember { mutableStateOf(if (initialExpense != null) initialExpense.amount.toString() else "") }
+    var isSplitMode by remember { mutableStateOf(initialExpense?.isSplit ?: false) }
+    var totalBillText by remember {
+        mutableStateOf(
+            if (initialExpense?.isSplit == true) initialExpense.splitTotalBill.toString()
+            else if (initialExpense != null) initialExpense.amount.toString()
+            else ""
+        )
+    }
+    var userAmountText by remember { mutableStateOf(if (initialExpense != null) initialExpense.amount.toString() else "") }
     var title by remember { mutableStateOf(initialExpense?.title ?: "") }
     var selectedCategoryId by remember { mutableStateOf(initialExpense?.categoryId ?: "grocery") }
     var shopName by remember { mutableStateOf(initialExpense?.shopName ?: "") }
@@ -92,10 +116,25 @@ fun AddExpenseDialog(
     var selectedTags by remember { mutableStateOf(initialExpense?.tags?.toSet() ?: emptySet()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Split Expense states
+    var splitType by remember { mutableStateOf(initialExpense?.splitType ?: "Equal Split") }
+    var participantList by remember {
+        mutableStateOf(initialExpense?.splitParticipants ?: listOf(SplitParticipant(name = "Friend 1", amount = 0.0)))
+    }
+    var newParticipantName by remember { mutableStateOf("") }
+    var newTagText by remember { mutableStateOf("") }
+    var isAddTagDialogOpen by remember { mutableStateOf(false) }
+
     val scrollState = rememberScrollState()
     val paymentMethods = listOf("Cash", "bKash", "Nagad", "Bank Card", "Other")
-    val defaultTags = listOf("Personal", "Family", "Office", "Travel", "Emergency")
     val shopSuggestions = listOf("Madina Store", "Agora", "Shwapno", "Local Market", "Pharmacy")
+
+    // Recalculate amounts if Equal Split is active
+    val totalBillVal = totalBillText.toDoubleOrNull() ?: 0.0
+    val totalParticipantsCount = participantList.size + 1 // friends + user
+    val equalShare = if (isSplitMode && splitType == "Equal Split" && totalParticipantsCount > 0) {
+        totalBillVal / totalParticipantsCount
+    } else null
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -130,6 +169,52 @@ fun AddExpenseDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Mode Selector Card: Personal vs Split Expense
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSplitMode) LightBlue.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isSplitMode) Icons.Default.Group else Icons.Default.Person,
+                                contentDescription = null,
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = if (isSplitMode) "Split Expense Mode (বিল ভাগাভাগি)" else "Personal Expense (ব্যক্তিগত খরচ)",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isSplitMode) "বন্ধুদের সাথে মোট বিল ভাগ করুন" else "একক খরচের হিসাব রাখুন",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isSplitMode,
+                            onCheckedChange = { isSplitMode = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = PrimaryBlue)
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Amount Input Box
@@ -140,7 +225,7 @@ fun AddExpenseDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "ENTER AMOUNT (টাকার পরিমাণ)",
+                            text = if (isSplitMode) "TOTAL BILL AMOUNT (মোট বিল)" else "YOUR EXPENSE AMOUNT (আপনার খরচ)",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = PrimaryBlue
@@ -155,10 +240,11 @@ fun AddExpenseDialog(
                                 color = PrimaryBlue
                             )
                             OutlinedTextField(
-                                value = amountText,
+                                value = if (isSplitMode) totalBillText else userAmountText,
                                 onValueChange = { input ->
                                     if (input.isEmpty() || input.matches(Regex("""^\d*\.?\d{0,2}$"""))) {
-                                        amountText = input
+                                        if (isSplitMode) totalBillText = input
+                                        else userAmountText = input
                                     }
                                 },
                                 placeholder = { Text("0.00", fontSize = 28.sp) },
@@ -169,12 +255,165 @@ fun AddExpenseDialog(
                                     .testTag("expense_amount_input")
                             )
                         }
-                        Text(
-                            text = "Bangladeshi Taka (BDT)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+
+                        if (isSplitMode) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val myShare = equalShare ?: (userAmountText.toDoubleOrNull() ?: 0.0)
+                            Text(
+                                text = "আপনার নিজস্ব ভাগের হিসাব: ৳ ${String.format(Locale.US, "%,.2f", myShare)}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlue
+                                )
+                            )
+                        }
+                    }
+                }
+
+                // Split Details UI (shown if Split Mode is ON)
+                if (isSplitMode) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "ভাগাভাগির ধরন (Split Type)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = splitType == "Equal Split",
+                                    onClick = { splitType = "Equal Split" },
+                                    label = { Text("Equal Split (সমান ভাগ)") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = PrimaryBlue,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                                FilterChip(
+                                    selected = splitType == "Custom Split",
+                                    onClick = { splitType = "Custom Split" },
+                                    label = { Text("Custom Split (কাস্টম)") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = PrimaryBlue,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "অংশীদারদের তালিকা (Participants)",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // You (User)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "আপনি (You)",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                val calculatedShare = equalShare ?: (userAmountText.toDoubleOrNull() ?: 0.0)
+                                Text(
+                                    text = "৳ ${String.format(Locale.US, "%.2f", calculatedShare)}",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryBlue
+                                    )
+                                )
+                            }
+
+                            // Participants List
+                            participantList.forEachIndexed { index, participant ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = {
+                                                participantList = participantList.toMutableList().apply { removeAt(index) }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Close, contentDescription = "Remove", tint = Color.Red)
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = participant.name, style = MaterialTheme.typography.bodyMedium)
+                                    }
+
+                                    if (splitType == "Equal Split") {
+                                        Text(
+                                            text = "৳ ${String.format(Locale.US, "%.2f", equalShare ?: 0.0)}",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                    } else {
+                                        OutlinedTextField(
+                                            value = participant.amount.let { if (it > 0) it.toString() else "" },
+                                            onValueChange = { valAmt ->
+                                                val parsed = valAmt.toDoubleOrNull() ?: 0.0
+                                                participantList = participantList.toMutableList().apply {
+                                                    this[index] = this[index].copy(amount = parsed)
+                                                }
+                                            },
+                                            placeholder = { Text("0.00") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.width(100.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Add Participant Field
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = newParticipantName,
+                                    onValueChange = { newParticipantName = it },
+                                    label = { Text("Friend's Name") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        if (newParticipantName.isNotBlank()) {
+                                            val initialAmt = if (splitType == "Equal Split") 0.0 else 0.0
+                                            participantList = participantList + SplitParticipant(
+                                                name = newParticipantName.trim(),
+                                                amount = initialAmt,
+                                                avatarInitial = newParticipantName.trim().take(1).uppercase()
+                                            )
+                                            newParticipantName = ""
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Add")
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -185,7 +424,7 @@ fun AddExpenseDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Expense Title / Note (খরচের নাম)") },
-                    placeholder = { Text("e.g. Grocery Shopping, Lunch, Bus Fare") },
+                    placeholder = { Text("e.g. Grocery Shopping, Dinner, Taxi Fare") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("expense_title_input"),
@@ -335,16 +574,27 @@ fun AddExpenseDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Custom Tags
-                Text(
-                    text = "ট্যাগ (Tags)",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "ট্যাগ (Custom Tags)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    TextButton(onClick = { isAddTagDialogOpen = true }) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("+ Add Tag", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    defaultTags.forEach { tag ->
+                    availableTags.forEach { tag ->
                         val isSelected = selectedTags.contains(tag)
                         FilterChip(
                             selected = isSelected,
@@ -382,18 +632,37 @@ fun AddExpenseDialog(
                 // Save Expense CTA Button
                 Button(
                     onClick = {
-                        val parsedAmount = amountText.toDoubleOrNull()
-                        if (parsedAmount == null || parsedAmount <= 0) {
+                        val finalUserAmount = if (isSplitMode) {
+                            if (splitType == "Equal Split") equalShare ?: 0.0
+                            else (totalBillVal - participantList.sumOf { it.amount })
+                        } else {
+                            userAmountText.toDoubleOrNull() ?: 0.0
+                        }
+
+                        if (finalUserAmount <= 0 && !isSplitMode) {
                             errorMessage = "টাকার সঠিক পরিমাণ দিন (Amount must be > 0)"
                             return@Button
                         }
+                        if (isSplitMode && totalBillVal <= 0) {
+                            errorMessage = "মোট বিলে সঠিক পরিমাণ দিন"
+                            return@Button
+                        }
+
                         if (title.isBlank()) {
                             val cat = CategoryConstants.getCategoryById(selectedCategoryId)
-                            title = cat.nameBn
+                            title = if (isSplitMode) "Split Bill - ${cat.nameBn}" else cat.nameBn
                         }
                         errorMessage = null
+
+                        // Final participants list with shares
+                        val finalParticipants = if (isSplitMode && splitType == "Equal Split") {
+                            participantList.map { it.copy(amount = equalShare ?: 0.0) }
+                        } else {
+                            participantList
+                        }
+
                         onSave(
-                            parsedAmount,
+                            finalUserAmount,
                             title,
                             selectedCategoryId,
                             shopName,
@@ -401,7 +670,11 @@ fun AddExpenseDialog(
                             dateText,
                             timeText,
                             notes,
-                            selectedTags.toList()
+                            selectedTags.toList(),
+                            isSplitMode,
+                            finalParticipants,
+                            splitType,
+                            if (isSplitMode) totalBillVal else finalUserAmount
                         )
                     },
                     modifier = Modifier
@@ -419,5 +692,42 @@ fun AddExpenseDialog(
                 }
             }
         }
+    }
+
+    // Add Custom Tag Dialog
+    if (isAddTagDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { isAddTagDialogOpen = false },
+            title = { Text("Create New Tag (নতুন ট্যাগ)") },
+            text = {
+                OutlinedTextField(
+                    value = newTagText,
+                    onValueChange = { newTagText = it },
+                    label = { Text("Tag Name (e.g. Vacation, Medical)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newTagText.isNotBlank()) {
+                            val clean = newTagText.trim()
+                            onAddCustomTag?.invoke(clean)
+                            selectedTags = selectedTags + clean
+                            newTagText = ""
+                        }
+                        isAddTagDialogOpen = false
+                    }
+                ) {
+                    Text("Add Tag")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isAddTagDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

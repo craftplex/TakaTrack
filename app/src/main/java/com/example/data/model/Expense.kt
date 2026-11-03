@@ -20,6 +20,9 @@ data class Expense(
     val notes: String = "",
     val tags: List<String> = emptyList(),
     val isSplit: Boolean = false,
+    val splitParticipants: List<SplitParticipant> = emptyList(),
+    val splitType: String = "equal",
+    val splitTotalBill: Double = 0.0,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

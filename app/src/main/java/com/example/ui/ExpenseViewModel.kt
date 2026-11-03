@@ -22,6 +22,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+import com.example.data.model.CategoryBudgetInfo
+import com.example.data.model.SplitParticipant
+
 data class CategorySummary(
     val category: ExpenseCategory,
     val totalAmount: Double,
@@ -75,6 +78,12 @@ data class ExpenseScreenState(
     val transactionCount: Int = 0,
     val dailyAverageExpense: Double = 0.0,
     val categoryBreakdowns: List<CategorySummary> = emptyList(),
+    val categoryBudgetsInfo: List<CategoryBudgetInfo> = emptyList(),
+    val customTags: List<String> = listOf("Personal", "Family", "Office", "Travel", "Emergency"),
+    val budgetWarning50: Boolean = true,
+    val budgetWarning75: Boolean = true,
+    val budgetWarning90: Boolean = true,
+    val budgetWarning100: Boolean = true,
     val monthlyLimit: Double = 20000.0,
     val budgetUsagePercent: Float = 0f,
     val remainingBudget: Double = 20000.0,
@@ -203,7 +212,11 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
         date: String,
         time: String,
         notes: String,
-        tags: List<String>
+        tags: List<String>,
+        isSplit: Boolean = false,
+        splitParticipants: List<SplitParticipant> = emptyList(),
+        splitType: String = "Equal Split",
+        splitTotalBill: Double = 0.0
     ) {
         val category = CategoryConstants.getCategoryById(categoryId)
         val expense = Expense(
@@ -216,7 +229,11 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
             expenseDate = date.ifBlank { getTodayDateString() },
             expenseTime = time.ifBlank { getCurrentTimeString() },
             notes = notes,
-            tags = tags
+            tags = tags,
+            isSplit = isSplit,
+            splitParticipants = splitParticipants,
+            splitType = splitType,
+            splitTotalBill = splitTotalBill
         )
         viewModelScope.launch {
             val result = repository.addExpense(expense)
@@ -233,6 +250,77 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
                     dialogState = currentDialog.copy(
                         message = result.exceptionOrNull()?.localizedMessage ?: "Failed to save expense"
                     )
+                )
+            }
+        }
+    }
+
+    fun setCategoryBudget(categoryId: String, limitAmount: Double) {
+        val currentMap = uiState.value.userProfile?.categoryBudgets?.toMutableMap() ?: mutableMapOf()
+        if (limitAmount > 0) {
+            currentMap[categoryId] = limitAmount
+        } else {
+            currentMap.remove(categoryId)
+        }
+        viewModelScope.launch {
+            val result = repository.updateCategoryBudgets(currentMap)
+            if (result.isSuccess) {
+                val cat = CategoryConstants.getCategoryById(categoryId)
+                val currentDialog = _filterParams.value.dialogState
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(
+                        message = "${cat.nameBn}-এর বাজেট সীমা ৳${String.format(Locale.US, "%.0f", limitAmount)} নির্ধারণ করা হয়েছে।"
+                    )
+                )
+            }
+        }
+    }
+
+    fun addCustomTag(tagName: String) {
+        val cleanTag = tagName.trim()
+        if (cleanTag.isBlank()) return
+        val currentTags = uiState.value.customTags.toMutableList()
+        if (!currentTags.contains(cleanTag)) {
+            currentTags.add(cleanTag)
+            viewModelScope.launch {
+                val result = repository.updateCustomTags(currentTags)
+                if (result.isSuccess) {
+                    val currentDialog = _filterParams.value.dialogState
+                    _filterParams.value = _filterParams.value.copy(
+                        dialogState = currentDialog.copy(message = "নতুন ট্যাগ '$cleanTag' যুক্ত করা হয়েছে")
+                    )
+                }
+            }
+        }
+    }
+
+    fun deleteCustomTag(tagName: String) {
+        val currentTags = uiState.value.customTags.toMutableList()
+        if (currentTags.remove(tagName)) {
+            viewModelScope.launch {
+                val result = repository.updateCustomTags(currentTags)
+                if (result.isSuccess) {
+                    val currentDialog = _filterParams.value.dialogState
+                    _filterParams.value = _filterParams.value.copy(
+                        dialogState = currentDialog.copy(message = "ট্যাগ '$tagName' মুছে ফেলা হয়েছে")
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateBudgetNotificationSettings(
+        w50: Boolean,
+        w75: Boolean,
+        w90: Boolean,
+        w100: Boolean
+    ) {
+        viewModelScope.launch {
+            val result = repository.updateBudgetNotificationSettings(w50, w75, w90, w100)
+            if (result.isSuccess) {
+                val currentDialog = _filterParams.value.dialogState
+                _filterParams.value = _filterParams.value.copy(
+                    dialogState = currentDialog.copy(message = "নোটিফিকেশন পছন্দসমূহ আপডেট করা হয়েছে")
                 )
             }
         }
@@ -527,6 +615,41 @@ private fun calculateUiState(
     if (eveningList.isNotEmpty()) dailyTimeline.add(DailyTimelineGroup("Evening", "সন্ধ্যা", eveningList))
     if (nightList.isNotEmpty()) dailyTimeline.add(DailyTimelineGroup("Night", "রাত", nightList))
 
+    // Category Budget Info calculation
+    val userCatLimits = profile?.categoryBudgets ?: emptyMap()
+    val categoryBudgetsInfoList = CategoryConstants.Categories.map { cat ->
+        val limit = userCatLimits[cat.id] ?: 0.0
+        val spent = allExpenses
+            .filter { it.expenseDate.startsWith(currentMonthPrefix) && it.categoryId.equals(cat.id, ignoreCase = true) }
+            .sumOf { it.amount }
+        val usagePct = if (limit > 0) ((spent / limit) * 100).toFloat() else 0f
+        val remaining = maxOf(0.0, limit - spent)
+        val isOver = limit > 0 && spent > limit
+        CategoryBudgetInfo(
+            category = cat,
+            limitAmount = limit,
+            spentAmount = spent,
+            usagePercent = usagePct,
+            remainingAmount = remaining,
+            isOverBudget = isOver
+        )
+    }
+
+    // Category Overbudget insights
+    val overBudgetCategories = categoryBudgetsInfoList.filter { it.isOverBudget }
+    for (ob in overBudgetCategories) {
+        insights.add(
+            SpendingInsight(
+                title = "${ob.category.nameBn} বাজেট অতিক্রম!",
+                description = "${ob.category.nameBn}-এ ধার্যকৃত ৳${String.format(Locale.US, "%.0f", ob.limitAmount)}-এর জায়গায় ৳${String.format(Locale.US, "%.0f", ob.spentAmount)} খরচ হয়ে গেছে।",
+                category = ob.category,
+                isWarning = true
+            )
+        )
+    }
+
+    val customTagsList = profile?.customTags ?: listOf("Personal", "Family", "Office", "Travel", "Emergency")
+
     return ExpenseScreenState(
         isLoading = false,
         userProfile = profile,
@@ -543,6 +666,12 @@ private fun calculateUiState(
         transactionCount = transactionCount,
         dailyAverageExpense = dailyAverage,
         categoryBreakdowns = breakdowns,
+        categoryBudgetsInfo = categoryBudgetsInfoList,
+        customTags = customTagsList,
+        budgetWarning50 = profile?.budgetWarning50 ?: true,
+        budgetWarning75 = profile?.budgetWarning75 ?: true,
+        budgetWarning90 = profile?.budgetWarning90 ?: true,
+        budgetWarning100 = profile?.budgetWarning100 ?: true,
         monthlyLimit = monthlyLimit,
         budgetUsagePercent = budgetUsagePercent,
         remainingBudget = remainingBudget,

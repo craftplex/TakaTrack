@@ -156,6 +156,53 @@ fun ExpenseDetailsDialog(
                     value = expense.paymentMethod
                 )
 
+                // Split Expense Details Card
+                if (expense.isSplit) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "বিল ভাগাভাগি বিবরন (Split Bill)",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlue
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "মোট বিল: ৳${String.format(Locale.US, "%,.2f", expense.splitTotalBill)} (${expense.splitType})",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                            )
+                            if (expense.splitParticipants.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "অংশীদারগণ:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                expense.splitParticipants.forEach { p ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(text = "• ${p.name}", style = MaterialTheme.typography.bodySmall)
+                                        Text(
+                                            text = "৳${String.format(Locale.US, "%.2f", p.amount)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Tags
                 if (expense.tags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))

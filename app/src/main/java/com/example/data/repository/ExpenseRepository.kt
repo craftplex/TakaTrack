@@ -151,6 +151,68 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun updateCategoryBudgets(categoryBudgets: Map<String, Double>): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid)
+        return try {
+            val updates = mapOf(
+                "categoryBudgets" to categoryBudgets,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(updates, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateCustomTags(tags: List<String>): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid)
+        return try {
+            val updates = mapOf(
+                "customTags" to tags,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(updates, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateBudgetNotificationSettings(
+        w50: Boolean,
+        w75: Boolean,
+        w90: Boolean,
+        w100: Boolean
+    ): Result<Unit> {
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid)
+        return try {
+            val updates = mapOf(
+                "budgetWarning50" to w50,
+                "budgetWarning75" to w75,
+                "budgetWarning90" to w90,
+                "budgetWarning100" to w100,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            docRef.set(updates, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
     /**
      * Adds a new expense record under the authenticated user.
      */
@@ -158,6 +220,13 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
         val uid = requireUserId()
         val collRef = db.collection("users").document(uid).collection("expenses")
         return try {
+            val participantsList = expense.splitParticipants.map {
+                hashMapOf<String, Any>(
+                    "name" to it.name,
+                    "amount" to it.amount,
+                    "avatarInitial" to it.avatarInitial
+                )
+            }
             val payload = hashMapOf<String, Any>(
                 "userId" to uid,
                 "amount" to expense.amount,
@@ -171,6 +240,9 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
                 "notes" to expense.notes.trim(),
                 "tags" to expense.tags,
                 "isSplit" to expense.isSplit,
+                "splitParticipants" to participantsList,
+                "splitType" to expense.splitType,
+                "splitTotalBill" to expense.splitTotalBill,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -192,6 +264,13 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
         require(expense.id.isNotBlank()) { "Expense ID cannot be blank for update" }
         val docRef = db.collection("users").document(uid).collection("expenses").document(expense.id)
         return try {
+            val participantsList = expense.splitParticipants.map {
+                hashMapOf<String, Any>(
+                    "name" to it.name,
+                    "amount" to it.amount,
+                    "avatarInitial" to it.avatarInitial
+                )
+            }
             val payload = hashMapOf<String, Any>(
                 "userId" to uid,
                 "amount" to expense.amount,
@@ -205,6 +284,9 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
                 "notes" to expense.notes.trim(),
                 "tags" to expense.tags,
                 "isSplit" to expense.isSplit,
+                "splitParticipants" to participantsList,
+                "splitType" to expense.splitType,
+                "splitTotalBill" to expense.splitTotalBill,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             docRef.update(payload).await()
