@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information and personal preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Google user ID"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "monthlyLimit": {
+          "type": "number",
+          "description": "User monthly spending limit in BDT"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code e.g. BDT"
+        },
+        "language": {
+          "type": "string",
+          "description": "UI language preference e.g. bn or en"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp via serverTimestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update timestamp via serverTimestamp"
+        }
+      },
+      "required": ["userId", "displayName", "email", "createdAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Recorded expense transaction",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Expense document identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user identifier"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount spent in BDT (strictly positive)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Expense description or item title"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Identifier of the category"
+        },
+        "categoryName": {
+          "type": "string",
+          "description": "Name of the category"
+        },
+        "shopName": {
+          "type": "string",
+          "description": "Optional merchant or shop name"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method used (e.g., Cash, bKash, Nagad, Bank Card, Other)"
+        },
+        "expenseDate": {
+          "type": "string",
+          "description": "ISO date YYYY-MM-DD"
+        },
+        "expenseTime": {
+          "type": "string",
+          "description": "Time HH:mm"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional detailed notes"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Custom tags attached to this expense"
+        },
+        "isSplit": {
+          "type": "boolean",
+          "description": "Whether this expense was split"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp via serverTimestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update timestamp via serverTimestamp"
+        }
+      },
+      "required": ["userId", "amount", "title", "categoryId", "categoryName", "expenseDate", "paymentMethod", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user profile and preferences"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Stores user expense records"
+    }
+  }
+}

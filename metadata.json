@@ -1,0 +1,6 @@
+{
+  "name": "TakaTrack",
+  "description": "Smart expense tracking, analytics, and budget management app",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
